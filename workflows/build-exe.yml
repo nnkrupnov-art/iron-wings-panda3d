@@ -1,0 +1,40 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      - name: Install Panda3D
+        run: pip install panda3d==1.10.16
+        
+      - name: Build EXE
+        run: |
+          pip install pyinstaller
+          pyinstaller --noconfirm --onefile --windowed --name IronWings --distpath ./dist main.py
+          
+      - name: Create package
+        run: |
+          Copy-Item main.py dist/
+          Compress-Archive -Path dist/IronWings.exe -DestinationPath IronWings.exe.zip -Force
+          Get-ChildItem dist/
+          
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IronWings-exe
+          path: dist/IronWings.exe
+          retention-days: 30
