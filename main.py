@@ -201,10 +201,6 @@ class FlightSimulator(ShowBase):
         texcoord = GeomVertexWriter(vdata, 'texcoord')
         
         geom = Geom(vdata)
-        vertex = GeomVertexWriter(vdata, 'vertex')
-        normal = GeomVertexWriter(vdata, 'normal')
-        color = GeomVertexWriter(vdata, 'color')
-        texcoord = GeomVertexWriter(vdata, 'texcoord')
         
         segs = self.TERRAIN_SEGMENTS
         size = self.WORLD_SIZE
