@@ -1,1 +1,18 @@
-.git
+# Build artifacts
+build/
+dist/*.exe
+dist/*.zip
+*.pyc
+__pycache__/
+*.pyo
+*.so
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Binary (too large for git)
+IronWings-Win64.zip
