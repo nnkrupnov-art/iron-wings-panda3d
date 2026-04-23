@@ -46,6 +46,125 @@ class FlightSimulator(ShowBase):
         
         # Disable default mouse camera control
         self.disableMouse()
+
+        # =============================================
+        # Procedural Model Helpers (replaces missing models)
+        # =============================================
+        self._model_cache = {}
+        
+    def _create_box(self, name, width, height, depth, color=None):
+        """Create a procedural box geometry"""
+        if name in self._model_cache:
+            return self._model_cache[name].copyTo(self.render)
+        
+        from panda3d.core import Geom, GeomNode, GeomVertexFormat, GeomVertexData, GeomVertexWriter, GeomTriangles
+        
+        format = GeomVertexFormat.getV3n3c4t2()
+        vdata = GeomVertexData('box', format, Geom.UHStatic)
+        
+        vertex = GeomVertexWriter(vdata, 'vertex')
+        normal = GeomVertexWriter(vdata, 'normal')
+        texcoord = GeomVertexWriter(vdata, 'texcoord')
+        
+        hw, hh, hd = width/2, height/2, depth/2
+        
+        # 8 vertices of box
+        vertices = [
+            (-hw, -hh, -hd), (hw, -hh, -hd), (hw, hh, -hd), (-hw, hh, -hd),
+            (-hw, -hh, hd), (hw, -hh, hd), (hw, hh, hd), (-hw, hh, hd)
+        ]
+        
+        # Faces with normals
+        faces = [
+            (0, 3, 2, 1, (0, 0, -1)),  # back
+            (4, 5, 6, 7, (0, 0, 1)),   # front
+            (0, 4, 7, 3, (-1, 0, 0)),  # left
+            (1, 2, 6, 5, (1, 0, 0)),   # right
+            (0, 1, 5, 4, (0, -1, 0)),  # bottom
+            (3, 7, 6, 2, (0, 1, 0)),   # top
+        ]
+        
+        for v0, v3, v2, v1, norm in faces:
+            vi = vertex.addData3
+            ni = normal.addData3
+            ti = texcoord.addData2
+            vi(*vertices[v0]); ni(*norm); ti(0, 0)
+            vi(*vertices[v1]); ni(*norm); ti(1, 0)
+            vi(*vertices[v2]); ni(*norm); ti(1, 1)
+            vi(*vertices[v3]); ni(*norm); ti(0, 1)
+        
+        tris = GeomTriangles(Geom.UHStatic)
+        for i in range(6):
+            base = i * 4
+            tris.addVertices(base, base+1, base+2)
+            tris.addVertices(base, base+2, base+3)
+        
+        geom = Geom(vdata)
+        geom.addPrimitive(tris)
+        
+        node = GeomNode(name)
+        node.addGeom(geom)
+        result = self.render.attachNewNode(node)
+        
+        if color:
+            result.setColor(color)
+        
+        self._model_cache[name] = node
+        return result.copyTo(self.render)
+    
+    def _create_sphere(self, name, radius=1, color=None):
+        """Create a procedural sphere geometry"""
+        if f"sphere_{name}" in self._model_cache:
+            return self._model_cache[f"sphere_{name}"].copyTo(self.render)
+        
+        from panda3d.core import Geom, GeomNode, GeomVertexFormat, GeomVertexData, GeomVertexWriter, GeomTriangles
+        import math
+        
+        format = GeomVertexFormat.getV3n3c4t2()
+        vdata = GeomVertexData('sphere', format, Geom.UHStatic)
+        
+        vertex = GeomVertexWriter(vdata, 'vertex')
+        normal = GeomVertexWriter(vdata, 'normal')
+        texcoord = GeomVertexWriter(vdata, 'texcoord')
+        
+        stacks, slices = 12, 16
+        
+        for i in range(stacks + 1):
+            phi = math.pi * i / stacks
+            for j in range(slices + 1):
+                theta = 2 * math.pi * j / slices
+                x = radius * math.sin(phi) * math.cos(theta)
+                y = radius * math.sin(phi) * math.sin(theta)
+                z = radius * math.cos(phi)
+                vertex.addData3(x, y, z)
+                normal.addData3(x/radius, y/radius, z/radius)
+                texcoord.addData2(j/slices, i/stacks)
+        
+        tris = GeomTriangles(Geom.UHStatic)
+        for i in range(stacks):
+            for j in range(slices):
+                v1 = i * (slices + 1) + j
+                v2 = v1 + 1
+                v3 = v1 + slices + 1
+                v4 = v3 + 1
+                if i != 0:
+                    tris.addVertices(v1, v2, v3)
+                if i != stacks - 1:
+                    tris.addVertices(v2, v4, v3)
+        
+        geom = Geom(vdata)
+        geom.addPrimitive(tris)
+        
+        node = GeomNode(name)
+        node.addGeom(geom)
+        result = self.render.attachNewNode(node)
+        
+        if color:
+            result.setColor(color)
+        
+        self._model_cache[f"sphere_{name}"] = node
+        return result.copyTo(self.render)
+
         
         # Configuration
         self.WORLD_SIZE = 40000
@@ -173,7 +292,9 @@ class FlightSimulator(ShowBase):
     def create_sky(self):
         """Create sky dome with gradient"""
         # Sky sphere
-        self.sky = self.loader.loadModel("models/misc/sphere")
+        sky_maker = CardMaker('sky')
+        sky_maker.setFrame(-20000, 20000, -20000, 20000)
+        self.sky = self.render.attachNewNode(sky_maker.generate())
         self.sky.reparentTo(self.render)
         self.sky.setScale(20000)
         self.sky.setBin('background', 0)
@@ -182,7 +303,9 @@ class FlightSimulator(ShowBase):
         self.sky.setColor(Vec4(0.4, 0.6, 0.9, 1))
         
         # Sun sphere
-        self.sun = self.loader.loadModel("models/misc/sphere")
+        sun_maker = CardMaker('sun')
+        sun_maker.setFrame(-200, 200, -200, 200)
+        self.sun = self.render.attachNewNode(sun_maker.generate())
         self.sun.reparentTo(self.render)
         self.sun.setScale(100)
         self.sun.setPos(5000, 5000, 8000)
@@ -298,7 +421,7 @@ class FlightSimulator(ShowBase):
         self.water_time = 0
     
     def create_trees(self):
-        """Create instanced trees"""
+        """Create instanced trees using CardMaker"""
         self.tree_count = 300
         self.trees = []
         
@@ -314,18 +437,18 @@ class FlightSimulator(ShowBase):
             scale = 0.5 + random.random() * 1.5
             height = 3 + scale * 5
             
-            # Tree trunk
-            trunk = self.loader.loadModel("models/misc/rgbColor")
-            trunk.reparentTo(self.render)
+            # Tree trunk using CardMaker
+            trunk_maker = CardMaker('trunk')
+            trunk_maker.setFrame(-0.5, 0.5, 0, height)
+            trunk = self.render.attachNewNode(trunk_maker.generate())
             trunk.setPos(x, y, 0)
-            trunk.setScale(0.5, 0.5, height)
             trunk.setColor(Vec4(0.3, 0.2, 0.1, 1))
             
-            # Tree foliage (cone shape)
-            foliage = self.loader.loadModel("models/misc/sphere")
-            foliage.reparentTo(self.render)
+            # Tree foliage using CardMaker
+            foliage_maker = CardMaker('foliage')
+            foliage_maker.setFrame(-scale, scale, 0, scale * 3)
+            foliage = self.render.attachNewNode(foliage_maker.generate())
             foliage.setPos(x, y, height + scale * 2)
-            foliage.setScale(scale * 2, scale * 2, scale * 3)
             foliage.setColor(Vec4(0.15, 0.4, 0.15, 1))
     
     def create_clouds(self):
@@ -339,7 +462,7 @@ class FlightSimulator(ShowBase):
             
             size = 200 + random.random() * 400
             
-            cloud = self.loader.loadModel("models/misc/sphere")
+            cloud = self._create_sphere("sphere", 1)
             cloud.reparentTo(self.render)
             cloud.setPos(x, y, z)
             cloud.setScale(size, size, size * 0.4)
@@ -363,27 +486,27 @@ class FlightSimulator(ShowBase):
         metal = Vec4(0.5, 0.5, 0.5, 1)
         
         # Fuselage (main body)
-        self.fuselage = self.loader.loadModel("models/misc/rgbColor")
+        self.fuselage = self._create_box("box", 1, 1, 1)
         self.fuselage.reparentTo(self.aircraft)
         self.fuselage.setScale(1.2, 1.2, 7)  # Elongated
         self.fuselage.setColor(olive)
         
         # Nose cone
-        nose = self.loader.loadModel("models/misc/sphere")
+        nose = self._create_sphere("sphere", 1)
         nose.reparentTo(self.aircraft)
         nose.setScale(1.0, 1.0, 1.5)
         nose.setPos(0, 0, 8)
         nose.setColor(metal)
         
         # Engine cowling
-        cowling = self.loader.loadModel("models/misc/sphere")
+        cowling = self._create_sphere("sphere", 1)
         cowling.reparentTo(self.aircraft)
         cowling.setScale(1.1, 1.1, 1.2)
         cowling.setPos(0, 0, 6.5)
         cowling.setColor(metal)
         
         # Main wings
-        wings = self.loader.loadModel("models/misc/rgbColor")
+        wings = self._create_box("box", 1, 1, 1)
         wings.reparentTo(self.aircraft)
         wings.setScale(9, 0.2, 1.5)
         wings.setPos(-0.5, 0, 0)
@@ -391,7 +514,7 @@ class FlightSimulator(ShowBase):
         
         # Wing tips (angled)
         for side in [-1, 1]:
-            tip = self.loader.loadModel("models/misc/rgbColor")
+            tip = self._create_box("box", 1, 1, 1)
             tip.reparentTo(self.aircraft)
             tip.setScale(1, 0.15, 0.4)
             tip.setPos(-0.5, side * 9, 0)
@@ -399,21 +522,21 @@ class FlightSimulator(ShowBase):
             tip.setColor(olive)
         
         # Horizontal stabilizer
-        h_stab = self.loader.loadModel("models/misc/rgbColor")
+        h_stab = self._create_box("box", 1, 1, 1)
         h_stab.reparentTo(self.aircraft)
         h_stab.setScale(2, 0.15, 1.5)
         h_stab.setPos(-6, 0, 0)
         h_stab.setColor(olive)
         
         # Vertical stabilizer
-        v_stab = self.loader.loadModel("models/misc/rgbColor")
+        v_stab = self._create_box("box", 1, 1, 1)
         v_stab.reparentTo(self.aircraft)
         v_stab.setScale(0.15, 1.2, 2)
         v_stab.setPos(-6.5, 0, 0.8)
         v_stab.setColor(olive)
         
         # Armor plate (characteristic of IL-2)
-        armor = self.loader.loadModel("models/misc/rgbColor")
+        armor = self._create_box("box", 1, 1, 1)
         armor.reparentTo(self.aircraft)
         armor.setScale(2, 0.3, 1)
         armor.setPos(-1, 0, -0.5)
@@ -421,14 +544,14 @@ class FlightSimulator(ShowBase):
         
         # Cannon pods
         for side in [-1, 1]:
-            cannon = self.loader.loadModel("models/misc/rgbColor")
+            cannon = self._create_box("box", 1, 1, 1)
             cannon.reparentTo(self.aircraft)
             cannon.setScale(0.15, 0.15, 2)
             cannon.setPos(2, side * 2.5, -0.5)
             cannon.setColor(metal)
         
         # Propeller hub
-        self.prop_hub = self.loader.loadModel("models/misc/sphere")
+        self.prop_hub = self._create_sphere("sphere", 1)
         self.prop_hub.reparentTo(self.aircraft)
         self.prop_hub.setScale(0.4, 0.4, 0.3)
         self.prop_hub.setPos(0, 0, 8.5)
@@ -440,7 +563,7 @@ class FlightSimulator(ShowBase):
         self.propeller.setPos(0, 0, 8.7)
         
         for i in range(3):
-            blade = self.loader.loadModel("models/misc/rgbColor")
+            blade = self._create_box("box", 1, 1, 1)
             blade.reparentTo(self.propeller)
             blade.setScale(0.1, 2.5, 0.4)
             blade.setH(i * 120)
