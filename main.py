@@ -289,7 +289,7 @@ class FlightSimulator(ShowBase):
         water_maker.setFrame(-5000, 5000, 0, 6000)
         water_maker.setUvRange(0, 10)
         
-        self.water = self.render.attachNewNode(water_maker.create())
+        self.water = self.render.attachNewNode(water_maker.generate())
         self.water.setPos(5000, 3000, 0)
         self.water.setH(90)
         self.water.setColor(Vec4(0.1, 0.3, 0.5, 0.85))
