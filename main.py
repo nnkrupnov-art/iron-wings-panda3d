@@ -190,13 +190,17 @@ class FlightSimulator(ShowBase):
     
     def create_terrain(self):
         """Create procedural terrain with heightmap"""
-        # Create terrain geometry programmatically
-        from panda3d.core import Geom, GeomNode, GeomVertexFormat, GeomVertexWriter
+        from panda3d.core import Geom, GeomNode, GeomVertexFormat, GeomVertexData, GeomVertexWriter
         
         format = GeomVertexFormat.getV3n3c4t2()
-        geom = Geom(format)
+        vdata = GeomVertexData('terrain', format, Geom.UHStatic)
         
-        vdata = format.makeVertexData()
+        vertex = GeomVertexWriter(vdata, 'vertex')
+        normal = GeomVertexWriter(vdata, 'normal')
+        color = GeomVertexWriter(vdata, 'color')
+        texcoord = GeomVertexWriter(vdata, 'texcoord')
+        
+        geom = Geom(vdata)
         vertex = GeomVertexWriter(vdata, 'vertex')
         normal = GeomVertexWriter(vdata, 'normal')
         color = GeomVertexWriter(vdata, 'color')
